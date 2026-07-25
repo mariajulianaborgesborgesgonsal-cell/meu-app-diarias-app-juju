@@ -2,9 +2,11 @@ import sqlite3
 import jwt
 import re
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, render_template
+# 1. Adicionado send_from_directory no import do Flask
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Troque em produção
 CORS(app, supports_credentials=True, origins=[
@@ -102,6 +104,9 @@ def init_db():
         ''')
         db.commit()
 
+# 2. Executa a criação das tabelas automaticamente ao iniciar
+init_db()
+
 # -------------------- UTILITÁRIOS JWT --------------------
 def gerar_token(usuario):
     payload = {
@@ -126,6 +131,12 @@ def get_usuario_logado():
         token = auth_header.split(' ')[1]
         return usuario_por_token(token)
     return None
+
+# -------------------- ROTA PRINCIPAL (MOVIDA PARA LÁ) --------------------
+@app.route('/')
+def home():
+    # Carrega o index.html direto da raiz sem exigir a pasta /templates/
+    return send_from_directory('.', 'index.html')
 
 # -------------------- ROTAS DE AUTENTICAÇÃO --------------------
 @app.route('/api/registro', methods=['POST'])
@@ -493,8 +504,6 @@ def listar_usuarios():
     usuarios = db.execute('SELECT id, nome, avatar FROM usuarios WHERE id != ?', (user['id'],)).fetchall()
     return jsonify([dict(row) for row in usuarios]), 200
 
+# -------------------- EXECUÇÃO LOCAL --------------------
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-@app.route('/')
-def home():
-    return render_template('index.html')
