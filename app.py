@@ -104,11 +104,6 @@ def init_db():
 
 
 @app.route('/')
-def home():
-    return "API rodando com sucesso!"
-
-init_db()
-
 # -------------------- UTILITÁRIOS JWT --------------------
 def gerar_token(usuario):
     payload = {
