@@ -102,8 +102,6 @@ def init_db():
         ''')
         db.commit()
 
-
-@app.route('/')
 # -------------------- UTILITÁRIOS JWT --------------------
 def gerar_token(usuario):
     payload = {
