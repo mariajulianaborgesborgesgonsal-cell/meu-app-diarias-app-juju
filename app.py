@@ -1,5 +1,4 @@
 import sqlite3
-import json
 import re
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
@@ -120,10 +119,8 @@ def usuario_por_token(token):
         payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
         db = get_db()
         user = db.execute('SELECT * FROM usuarios WHERE id = ?', (payload['user_id'],)).fetchone()
-        return usuario_from_row(user) if user else None
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
+        return dict(user) if user else None
+    except:
         return None
 
 def get_usuario_logado():
@@ -133,12 +130,7 @@ def get_usuario_logado():
         return usuario_por_token(token)
     return None
 
-def usuario_from_row(row):
-    if not row:
-        return None
-    return dict(row)
-
-# -------------------- ROTAS DE AUTENTICAÇÃO (com JWT) --------------------
+# -------------------- ROTAS DE AUTENTICAÇÃO --------------------
 @app.route('/api/registro', methods=['POST'])
 def registro():
     data = request.json
@@ -164,10 +156,9 @@ def registro():
     )
     db.commit()
     user_id = cursor.lastrowid
-    user = db.execute('SELECT * FROM usuarios WHERE id = ?', (user_id,)).fetchone()
-    user_dict = usuario_from_row(user)
-    token = gerar_token(user_dict)
-    return jsonify({'token': token, 'usuario': user_dict}), 201
+    user = dict(db.execute('SELECT * FROM usuarios WHERE id = ?', (user_id,)).fetchone())
+    token = gerar_token(user)
+    return jsonify({'token': token, 'usuario': user}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -187,13 +178,12 @@ def login():
     if not user or not check_password_hash(user['senha'], senha):
         return jsonify({'erro': 'Credenciais inválidas'}), 401
 
-    user_dict = usuario_from_row(user)
+    user_dict = dict(user)
     token = gerar_token(user_dict)
     return jsonify({'token': token, 'usuario': user_dict}), 200
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
-    # No JWT, o logout é feito no frontend removendo o token
     return jsonify({'ok': True}), 200
 
 @app.route('/api/usuarios/me', methods=['GET'])
@@ -221,10 +211,10 @@ def atualizar_perfil():
         (habilidades, localizacao, experiencia, curriculo, user['id'])
     )
     db.commit()
-    user_atualizado = db.execute('SELECT * FROM usuarios WHERE id = ?', (user['id'],)).fetchone()
-    return jsonify(usuario_from_row(user_atualizado)), 200
+    user_atualizado = dict(db.execute('SELECT * FROM usuarios WHERE id = ?', (user['id'],)).fetchone())
+    return jsonify(user_atualizado), 200
 
-# -------------------- ROTAS DE DIÁRIAS (protegidas) --------------------
+# -------------------- ROTAS DE DIÁRIAS --------------------
 @app.route('/api/diarias', methods=['GET'])
 def listar_diarias():
     user = get_usuario_logado()
@@ -258,21 +248,20 @@ def criar_diaria():
     duracao = data.get('duracao')
     data_limite = data.get('data_limite')
 
-    data_hoje = datetime.now().strftime('%d/%m/%Y')
-    horario = '08h às 12h'
-
     if not titulo or not localizacao or not valor:
         return jsonify({'erro': 'Campos obrigatórios faltando'}), 400
 
     db = get_db()
+    data_hoje = datetime.now().strftime('%d/%m/%Y')
+    horario = '08h às 12h'
     cursor = db.execute(
         '''INSERT INTO diarias (titulo, descricao, localizacao, valor, categoria, duracao, contratante_id, data, horario, data_limite)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
         (titulo, descricao, localizacao, valor, categoria, duracao, user['id'], data_hoje, horario, data_limite)
     )
     db.commit()
-    diaria = db.execute('SELECT * FROM diarias WHERE id = ?', (cursor.lastrowid,)).fetchone()
-    return jsonify(dict(diaria)), 201
+    diaria = dict(db.execute('SELECT * FROM diarias WHERE id = ?', (cursor.lastrowid,)).fetchone())
+    return jsonify(diaria), 201
 
 @app.route('/api/diarias/<int:diaria_id>', methods=['PUT'])
 def atualizar_diaria(diaria_id):
@@ -292,10 +281,10 @@ def atualizar_diaria(diaria_id):
 
     db.execute('UPDATE diarias SET status = ? WHERE id = ?', (status, diaria_id))
     db.commit()
-    diaria = db.execute('SELECT * FROM diarias WHERE id = ?', (diaria_id,)).fetchone()
-    return jsonify(dict(diaria)), 200
+    diaria = dict(db.execute('SELECT * FROM diarias WHERE id = ?', (diaria_id,)).fetchone())
+    return jsonify(diaria), 200
 
-# -------------------- ROTAS DE CANDIDATURAS (protegidas) --------------------
+# -------------------- ROTAS DE CANDIDATURAS --------------------
 @app.route('/api/candidaturas', methods=['GET'])
 def listar_candidaturas():
     user = get_usuario_logado()
@@ -355,8 +344,8 @@ def criar_candidatura():
         (diaria_id, user['id'], mensagem)
     )
     db.commit()
-    candidatura = db.execute('SELECT * FROM candidaturas WHERE id = ?', (cursor.lastrowid,)).fetchone()
-    return jsonify(dict(candidatura)), 201
+    candidatura = dict(db.execute('SELECT * FROM candidaturas WHERE id = ?', (cursor.lastrowid,)).fetchone())
+    return jsonify(candidatura), 201
 
 @app.route('/api/candidaturas/<int:candidatura_id>', methods=['PUT'])
 def atualizar_candidatura(candidatura_id):
@@ -380,10 +369,10 @@ def atualizar_candidatura(candidatura_id):
     if status == 'aceita':
         db.execute('UPDATE diarias SET status = "em_andamento" WHERE id = ?', (candidatura['diaria_id'],))
     db.commit()
-    candidatura = db.execute('SELECT * FROM candidaturas WHERE id = ?', (candidatura_id,)).fetchone()
-    return jsonify(dict(candidatura)), 200
+    candidatura = dict(db.execute('SELECT * FROM candidaturas WHERE id = ?', (candidatura_id,)).fetchone())
+    return jsonify(candidatura), 200
 
-# -------------------- ROTAS DE AVALIAÇÕES (protegidas) --------------------
+# -------------------- ROTAS DE AVALIAÇÕES --------------------
 @app.route('/api/avaliacoes', methods=['POST'])
 def criar_avaliacao():
     user = get_usuario_logado()
@@ -414,6 +403,7 @@ def criar_avaliacao():
         'UPDATE usuarios SET avaliacao = ?, total_avaliacoes = ? WHERE id = ?',
         (media, novo_total, trabalhador_id)
     )
+
     db.execute(
         'INSERT INTO avaliacoes (diaria_id, trabalhador_id, contratante_id, nota, comentario, recontratar) VALUES (?, ?, ?, ?, ?, ?)',
         (diaria_id, trabalhador_id, user['id'], nota, comentario, recontratar)
@@ -421,7 +411,7 @@ def criar_avaliacao():
     db.commit()
     return jsonify({'ok': True}), 201
 
-# -------------------- ROTAS DE MENSAGENS (protegidas) --------------------
+# -------------------- ROTAS DE MENSAGENS --------------------
 @app.route('/api/mensagens/<int:destinatario_id>', methods=['GET'])
 def listar_mensagens(destinatario_id):
     user = get_usuario_logado()
@@ -455,10 +445,10 @@ def enviar_mensagem():
         (user['id'], destinatario_id, texto, hora)
     )
     db.commit()
-    mensagem = db.execute('SELECT * FROM mensagens WHERE id = ?', (cursor.lastrowid,)).fetchone()
-    return jsonify(dict(mensagem)), 201
+    mensagem = dict(db.execute('SELECT * FROM mensagens WHERE id = ?', (cursor.lastrowid,)).fetchone())
+    return jsonify(mensagem), 201
 
-# -------------------- ROTAS DE ASSINATURA (protegida) --------------------
+# -------------------- ROTAS DE ASSINATURA --------------------
 @app.route('/api/assinatura', methods=['PUT'])
 def atualizar_assinatura():
     user = get_usuario_logado()
@@ -471,10 +461,10 @@ def atualizar_assinatura():
     db = get_db()
     db.execute('UPDATE usuarios SET plano = ? WHERE id = ?', (plano, user['id']))
     db.commit()
-    user_atualizado = db.execute('SELECT * FROM usuarios WHERE id = ?', (user['id'],)).fetchone()
-    return jsonify(usuario_from_row(user_atualizado)), 200
+    user_atualizado = dict(db.execute('SELECT * FROM usuarios WHERE id = ?', (user['id'],)).fetchone())
+    return jsonify(user_atualizado), 200
 
-# -------------------- ROTAS PARA BUSCAR PROFISSIONAIS (protegida) --------------------
+# -------------------- ROTAS PARA BUSCAR PROFISSIONAIS --------------------
 @app.route('/api/profissionais', methods=['GET'])
 def buscar_profissionais():
     user = get_usuario_logado()
@@ -496,7 +486,7 @@ def buscar_profissionais():
         print(f"Erro em /api/profissionais: {e}")
         return jsonify({'erro': str(e)}), 500
 
-# -------------------- ROTAS PARA LISTAR TODOS USUÁRIOS (protegida) --------------------
+# -------------------- ROTAS PARA LISTAR TODOS USUÁRIOS --------------------
 @app.route('/api/usuarios', methods=['GET'])
 def listar_usuarios():
     user = get_usuario_logado()
