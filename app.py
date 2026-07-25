@@ -1,11 +1,10 @@
 import sqlite3
+import jwt
 import re
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
-import jwt
-
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Troque em produção
 CORS(app, supports_credentials=True, origins=[
@@ -103,6 +102,11 @@ def init_db():
         ''')
         db.commit()
 
+
+@app.route('/')
+def home():
+    return "API rodando com sucesso!"
+
 init_db()
 
 # -------------------- UTILITÁRIOS JWT --------------------
@@ -110,7 +114,7 @@ def gerar_token(usuario):
     payload = {
         'user_id': usuario['id'],
         'tipo': usuario['tipo'],
-        'exp': datetime.utcnow() + timedelta(days=1)
+        'exp': datetime.now() + timedelta(days=1)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
 
